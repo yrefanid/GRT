@@ -1,0 +1,48 @@
+(define (domain mystery-strips)
+   (:predicates
+       (city ?x)
+	 (city_fuel ?c ?f)
+       (truck ?x)
+       (package ?x)
+       (connected ?n1 ?n2)
+       (at ?v ?n)
+       (in ?c ?v)
+       (truck_volume ?t ?v))
+
+   (:action load
+       :parameters (?Package ?Truck ?City ?Volume)
+       :precondition (and (package ?Package)
+			  (truck ?Truck)
+			  (city ?City)
+                    (truck_volume ?Truck ?Volume)
+			  (at ?Package ?City)
+                    (at ?Truck ?City))
+       :effect (and (not (at ?Package ?City))
+                    (in ?Package ?Truck))
+	 :resources   (amount ?Volume 1) )	
+
+   (:action move
+       :parameters (?Truck ?City1 ?City2 ?Fuel)
+       :precondition (and 
+			  (truck ?Truck)
+			  (city ?City1)
+			  (city ?City2)			
+                    (connected ?City1 ?City2)
+			  (city_fuel ?City1 ?Fuel)
+			  (at ?Truck ?City1))
+       :effect (and (not (at ?Truck ?City1))
+                    (at ?Truck ?City2))
+       :resources (amount ?Fuel 1) )
+
+   (:action unload
+       :parameters (?Package ?Truck ?City ?Volume)
+       :precondition (and (package ?Package)
+			  (truck ?Truck)
+			  (city ?City)
+			  (truck_volume ?Truck ?Volume)
+			  (in ?Package ?Truck)
+                    (at ?Truck ?City))
+       :effect (and (not (in ?Package ?Truck))
+                    (at ?Package ?City))
+	 :resources (amount ?Volume -1) )
+)
