@@ -1,0 +1,16 @@
+https://www.sciencedirect.com/science/article/pii/S0004370202003715
+
+Ioannis Refanidis, Ioannis Vlahavas,
+Multiobjective heuristic state-space planning,
+Artificial Intelligence,
+Volume 145, Issues 1–2,
+2003,
+Pages 1-32,
+ISSN 0004-3702,
+https://doi.org/10.1016/S0004-3702(02)00371-5.
+
+(https://www.sciencedirect.com/science/article/pii/S0004370202003715)
+
+Abstract: Modern domain-independent heuristic planners evaluate their plans on the single basis of their length. However, in real-world problems, there are other criteria that also play an important role, e.g., resource consumption, profit, safety, etc. This paper enhances the GRT planner, an efficient domain-independent heuristic state-space planner, with the ability to consider multiple criteria. The GRT heuristic is based on the estimation of the distances between each fact of a problem and the goals. The new planner, called MO-GRT, uses a weighted A? strategy and a multiobjective heuristic function, computed over a weighted hierarchy of user-defined criteria. Its computation is based on sets of non-dominated cost-vectors assigned to the problem facts, which estimate the total cost of achieving the facts from the goals, using alternative paths. Experiments show that a change in the criteria weights or scales affects both the quality of the resulting plan and the planning time. The proposed approach can easily be adapted to other modern heuristic state-space planners.
+Keywords: Planning; Heuristic search; Multiple criteria; Multiobjective search
+
