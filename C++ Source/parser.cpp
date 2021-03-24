@@ -1,40 +1,13 @@
 #include "planner.h"
 
-//#define domain_file "2000-Tests\\Blocks\\Track1\\Untyped\\domain.pddl"
-//#define problem_file "2000-Tests\\Blocks\\Track1\\Untyped\\probBLOCKS-9-0.pddl"
+int OSystem=1;
 
-//-d 2000-Tests\Blocks\Track1\Untyped\domain.pddl -p 2000-Tests\Blocks\Track1\Untyped\probBLOCKS-9-0.pddl
-
-//echo -d 2000-Tests\Logistics\Track1\Untyped\domain.pddl -p 2000-Tests\Logistics\Track1\Untyped\probLOGISTICS-10-0.pddl
-
-//#define domain_file "Domains\\blocks-strips.pddl"
-//#define problem_file "Domains\\bw-large-d.pddl"
-//#define problem_file "Domains\\blocks4.pddl"
-
-// -d Domains\\blocks-strips.pddl -p Domains\\bw-large-d.pddl
-
-//#define domain_file "2000-Tests\\Logistics\\Track1\\Untyped\\domain.pddl"
-//#define problem_file "2000-Tests\\Logistics\\Track1\\Untyped\\probLOGISTICS-14-1.pddl"
-
-//#define domain_file "Domains\\AIPS-98\\Logistics\\logistics-strips.pddl"
-//#define problem_file "Domains\\AIPS-98\\Logistics\\prob05.pddl"
-//#define problem_file "Domains\\log-c.pddl"
-
-//#define domain_file "Domains\\rocket-strips.pddl"
-//#define problem_file "Domains\\rocket-b.pddl"
-
-// echo -d 2000-Tests\Schedule\Strips\domain.pddl -p 2000-Tests\Schedule\Strips\probschedule-10-0.pddl
-
-// echo -d 2000-Tests\FreeCell\Untyped\domain.pddl -p 2000-Tests\FreeCell\Untyped\probfreecell-2-1.pddl
-
-//#define domain_file "Domains\\AIPS-98\\Movie\\movie-strips-n.pddl"
-//#define problem_file "Domains\\AIPS-98\\Movie\\prob20.pddl"
-
-//#define domain_file "Domains\\AIPS-98\\Gripper\\gripper-strips.pddl"
-//#define problem_file "Domains\\AIPS-98\\Gripper\\prob05.pddl"
-
-//#define domain_file "Domains\\Kautz\\domain.pddl"
-//#define problem_file "Domains\\Kautz\\prob028.pddl"
+/*
+-r0 -time 15 -strategy HILL -d "AIPS-2000\Logistics\Track1\Untyped\domain.pddl"  -p "AIPS-2000\Logistics\Track1\Untyped\probLOGISTICS-15-1.pddl"
+-display_short_messages -time 15 -strategy HILL -d "AIPS-2000\freecell\Untyped\domain.pddl"  -p "AIPS-2000\Freecell\Untyped\probfreecell-5-1.pddl"
+-r2 -display_short_messages -time 15 -strategy BEST -d "AIPS-2000\mic10\Untyped\domain.pddl"  -p "AIPS-2000\mic10\Untyped\s30-0.pddl"
+-display_short_messages -STRATEGY best -time 5 -d "AIPS-2000\Freecell\CompleteGoals\domain.pddl"  -p "AIPS-2000\Freecell\CompleteGoals\probfreecell-12-1.pddl" 
+*/
 
 char domain_file[max_file_name];
 char problem_file[max_file_name];
@@ -52,9 +25,10 @@ bool load_predicates();
 bool load_predicate();
 bool load_constants();
 bool ignore_list();
+bool load_xors();
 
-state initial2;
-
+state* initial2;
+ 
 void detect_constant_predicates();
 
 ifstream infile;
@@ -66,8 +40,10 @@ bool get_domain_header();
 
 bool load_domain()
 {
-	//infile.open(domain_file, ios::binary);
-	infile.open(domain_file, ios::in);
+	if (OSystem==1)
+		infile.open(domain_file, ios::binary);
+	else
+		infile.open(domain_file, ios::in);
 	char ch;
 	char wrd[max_sof_words+1];
 	if (!get_domain_header())
@@ -159,6 +135,15 @@ bool load_domain()
 					infile.close();
 					return false;
 				}
+			}
+			else if (strcmp2(wrd,"xors"))
+			{
+				if (!load_xors())
+				{
+					infile.close();
+					return false;
+				}
+				xor_enabled=true;
 			}
 			else
 			{
@@ -350,6 +335,72 @@ bool next_word(char wrd[max_sof_words+1])
 	return true;
 }
 
+// Function next_number() finds and stores the next number. If there is any problem,
+// the function returns false, otherwise it returns true.
+bool next_number(int* Amount)
+{
+	char ch=' ';
+	int prosimo=1;
+	*Amount =0;
+	
+	// search for the first non-white char
+	while (infile && white_char(ch))
+	{
+		infile.get(ch);
+		if (ch==';')
+		{
+			skip_line();
+			ch=' ';
+		}
+	}
+
+	if (!infile)
+	{
+		cout << endl << "UNexpected end of file" << endl;
+		return false;
+	}
+
+	if (ch=='-') 
+		prosimo=-1;
+	else if (ch<'0' || ch>'9') 
+		return false;
+
+	// if the first char was '+' or '-' then
+	// read also the second char.
+	if (ch=='+' || ch=='-')
+	{
+		if (infile)
+			ch=next_char();
+		else
+			return false;
+
+		if (ch<'0' || ch>'9')
+			return false;
+	}
+
+	while (infile && ch>='0' && ch<='9') 
+	{
+		*Amount =10* (*Amount) + (ch-'0');
+		infile.get(ch);
+		if (ch==';')
+			skip_line();
+	}
+
+	*Amount=prosimo*(*Amount);
+	
+	if (!infile || white_char(ch) || ch==';' )
+		return true;
+
+	infile.seekg(-1, ios::cur);
+
+	if (ch==')' || ch=='(')
+		return true;
+
+	*Amount=0;
+	return false;
+}
+
+
 
 
 bool load_requirements()
@@ -360,6 +411,327 @@ bool load_requirements()
 	return flag;
 }
 
+
+
+class linked_strings
+{
+public:
+	char name[max_sof_words+1];
+	linked_strings* next;
+
+	linked_strings(char wrd[max_sof_words+1])
+	{
+		strcpy(name, wrd);
+		next=NULL;
+	}
+};
+
+bool load_xors()
+{
+	char ch;
+	char wrd[max_sof_words+1];
+
+	int counter=0;
+
+	ch=next_char();
+	if (ch==')')
+	{
+		cout << "No XOR relations found." << endl;
+		return true;
+	}
+	
+	if (ch!='(')
+	{
+		cout << "Unexpected character: '" << ch << "' while loading XOR relations." << endl;
+		cout << "Left parenthesis expected." << endl;
+		return false;
+	}
+
+	linked_strings* vars_head=NULL;
+	linked_strings* vars_tail=NULL;
+	linked_strings* vars_temp;
+
+
+
+	while (ch=='(')		// For each XOR relation
+	{
+		counter++;
+		if (display_messages)
+			cout << "XOR relation " << counter << ":  ";
+
+		int nof_parameters=0;	// the number of the named variables
+								// referenced within the relation...
+		
+
+		ch=next_char();	// this is the left parenthesis that groups the XOR-constrained atoms
+					// with the constants.
+		if (ch!='(')
+		{
+			cout << "Unexpected character while loading XOR constraints." << endl;
+			cout << "Left parenthesis expected." << endl;
+			return false;
+		}
+		
+		xors=new constraints(xors);
+
+		if (!next_word(wrd))
+		{
+			cout << "Unexpected characters. Keyword 'xor ' expected." << endl;
+			return false;
+		}
+
+		if (!strcmp2(wrd, "xor"))
+		{
+			cout << "Unexpected keyword: " << wrd << endl;
+			cout << "Keyword 'xor ' expected." << endl;
+			return false;
+		}
+
+		ch=next_char();
+		while (ch=='(')	// for each XOR atom or group of atoms (AND structure)...
+		{
+			if (!next_word(wrd))
+			{
+				cout << "Unexpected characters. Predicate name expected." << endl;
+				return false;
+			}
+			
+			fact f;
+			if ((f.pred=P(wrd))==-1)
+			{
+				cout << "Unexpected word: " << wrd << endl;
+				cout << "Predicate name expected." << endl;
+				return false;
+			}
+/*
+			if (constant_predicates[f.pred])
+			{
+				cout << "ERROR: Constant predicate within a XOR relation." << endl;
+				return false;
+			}
+*/				
+			int i;
+			for(i=0;i<predicates[f.pred].arity;i++)
+			{
+				if (!next_word(wrd))
+				{
+					cout << "Unexpected characters: " << wrd << ". Object variable or name expected." << endl;
+					return false;
+				}
+				if (O(wrd)>0)
+					f.arguments[i]=O(wrd);
+				else if (strcmp2(wrd,"?"))
+					f.arguments[i]=0;
+				else if (wrd[0]!='?')
+				{
+					if (display_messages)
+						cout << "New object created: " << wrd << "." << endl;
+					strcpy(objects[++nof_objects].name, wrd);
+					f.arguments[i]=nof_objects;
+				}
+				else
+				{
+					bool found=false;
+					vars_temp=vars_head;
+					int j=1;
+					while (vars_temp!=NULL && !found)
+					{
+						if (strcmp2(vars_temp->name,wrd))
+							found=true;
+						else
+						{
+							j=j+1;
+							vars_temp=vars_temp->next;
+						}
+					}	//	while (temp!=NULL && !found)
+
+					if (!found)
+					{
+						nof_parameters++;
+						if (vars_head==NULL)
+						{
+							vars_head=new linked_strings(wrd);
+							vars_tail=vars_head;
+						}
+						else	// if (vars_head==NULL)
+						{
+							vars_temp=new linked_strings(wrd);
+							vars_tail->next=vars_temp;
+							vars_tail=vars_temp;
+						}	// if (vars_head==NULL)
+					}	// if (!found) 
+					f.arguments[i]=-j;
+				}
+			}
+			
+			xors->xor=new constraint(xors->xor);
+			xors->xor->ands=new linked_fact(f);
+			
+			ch=next_char();
+			if (ch!=')')
+			{
+				cout << "Unexpected character: '" << ch << "'. Right parenthseis expected." << endl;
+				return false;
+			}
+
+			if (display_messages)
+				cout << f << ",  ";
+			ch=next_char();
+		}	// while (ch=='(')	// for each XOR atom or group of atoms (AND structure)...
+		
+		if (ch!=')')
+		{
+			cout << "Unexpected character while loading XOR-relations. Right parenthesis expected."<< endl;
+			return false;
+		}
+		
+		ch=next_char();
+		if (ch=='(')
+		{
+			if (!next_word(wrd))
+			{
+				cout << "Unexpected characters. Keyword 'constants' expected." << endl;
+				return false;
+			}
+
+			if (!strcmp2(wrd, "constants"))
+			{
+				cout << "Unexpected keyword: " << wrd << endl;
+				cout << "Keyword 'constants' expected." << endl;
+				return false;
+			}
+
+			if (display_messages)
+				cout << "  Constants: ";
+			ch=next_char();
+			while (ch=='(')	// loading the XOR-relation constants...
+			{
+		
+				if (!next_word(wrd))
+				{
+					cout << "Unexpected characters. Predicate name expected." << endl;
+					return false;
+				}
+			
+				fact f;
+			
+				if ((f.pred=P(wrd))==-1)
+				{
+					cout << "Unexpected word: " << wrd << endl;
+					cout << "Predicate name expected." << endl;
+					return false;
+				}
+
+/*
+				if (!constant_predicates[f.pred])
+				{
+					cout << "ERROR: Not constant predicate within the constants of a XOR relation." << endl;
+					return false;
+				}
+*/				
+				int i;
+				for(i=0;i<predicates[f.pred].arity;i++)
+				{
+					if (!next_word(wrd))
+					{
+						cout << "Unexpected characters: " << wrd << ". Object variable or name expected." << endl;
+						return false;
+					}
+					if (O(wrd)>0)
+						f.arguments[i]=O(wrd);
+					else if (strcmp2(wrd,"?"))
+						f.arguments[i]=0;
+					else if (wrd[0]!='?')
+					{
+						if (display_messages)
+							cout << "New object created: " << wrd << "." << endl;
+						strcpy(objects[++nof_objects].name, wrd);
+						f.arguments[i]=nof_objects;
+					}
+					else
+					{
+						bool found=false;
+						vars_temp=vars_head;
+						int j=1;
+						while (vars_temp!=NULL && !found)
+						{
+							if (strcmp2(vars_temp->name,wrd))
+								found=true;
+							else
+							{
+								j=j+1;
+								vars_temp=vars_temp->next;
+							}
+						}	//	while (temp!=NULL && !found)
+	
+						if (!found)
+						{
+							nof_parameters++;
+							if (vars_head==NULL)
+							{
+								vars_head=new linked_strings(wrd);
+								vars_tail=vars_head;
+							}
+							else	// if (vars_head==NULL)
+							{
+								vars_temp=new linked_strings(wrd);
+								vars_tail->next=vars_temp;
+								vars_tail=vars_temp;
+							}	// if (vars_head==NULL)
+						}	// if (!found) 
+						f.arguments[i]=-j;
+					}
+				}
+			
+				xors->constants=new linked_fact(f, xors->constants);
+	
+				ch=next_char();
+				if (ch!=')')
+				{
+					cout << "Unexpected character: '" << ch << "'. Right parenthseis expected." << endl;
+					return false;
+				}
+				if (display_messages)
+					cout << f << ",  ";
+				ch=next_char();
+			}	// while (ch=='(')	 loading the XOR-relation constants...
+		}	// if (ch=='(')
+
+		if (ch!=')')
+		{
+			cout << "Unexpected character while loading XOR constraints." << endl;
+			cout << "Right or Left parenthesis expected." << endl;
+			return false;
+		}
+
+		xors->nof_parameters=nof_parameters;			
+
+		while (vars_head!=NULL)
+		{
+			vars_temp=vars_head;
+			vars_head=vars_head->next;
+			delete vars_temp;
+		}
+
+		ch=next_char();
+		if (ch!=')')
+		{
+			cout << "Unexpected character while loading XOR constraints." << endl;
+			cout << "Right or Left parenthesis expected." << endl;
+			return false;
+		}
+
+		if (display_messages)
+			cout << endl;
+		ch=next_char();
+
+	}	// while (ch=='(')		// For each XOR relation
+
+if (display_messages)
+	cout << "XOR relations loaded successfully." << endl;
+//	display_xor_relations();
+	return true;
+}
 
 
 bool load_types()
@@ -378,6 +750,7 @@ int		ops_nof_parameters;
 
 bool load_preconditions();
 bool load_effects();
+bool load_consumption();
 
 bool	load_operator()
 {
@@ -458,6 +831,12 @@ bool	load_operator()
 			if (!flag)
 				return false;
 		}
+		else if (strcmp2(wrd,"resources"))
+		{
+			if (!load_consumption())
+				return false;
+		}
+
 		else
 		{
 			cout << endl << "Unknown keyword: '" << wrd << "' while loading operator " << Operators[nof_operators].name << "." << endl;
@@ -474,6 +853,7 @@ bool	load_operator()
 	{
 		if (display_messages)
 			cout << "Operator " << Operators[nof_operators].name << " loaded successfully." << endl;
+		//cout << Operators[nof_operators] << endl;
 		nof_operators++;
 		return true;
 	}
@@ -552,7 +932,7 @@ bool load_preconditions()
 				{
 					int i=1;
 					while (i<=nof_objects && !flag)
-						if (strcmp2(wrd, objects[i]))
+						if (strcmp2(wrd, objects[i].name))
 							flag=true;
 						else
 							i++;
@@ -560,7 +940,7 @@ bool load_preconditions()
 						Operators[nof_operators].strips[prec_list][nof_precs].arguments[nof_args]=i;
 					else 
 					{
-						strcpy(objects[++nof_objects], wrd);
+						strcpy(objects[++nof_objects].name, wrd);
 						if (display_messages)
 							cout << "Object '" << wrd << "' created."<< endl;
 						Operators[nof_operators].strips[prec_list][nof_precs].arguments[nof_args]=nof_objects;
@@ -628,7 +1008,7 @@ bool load_preconditions()
 			{
 				int i=1;
 				while (i<=nof_objects && !flag)
-					if (strcmp2(wrd, objects[i]))
+					if (strcmp2(wrd, objects[i].name))
 						flag=true;
 					else
 						i++;
@@ -636,7 +1016,7 @@ bool load_preconditions()
 					Operators[nof_operators].strips[prec_list][0].arguments[nof_args]=i;
 				else 
 				{
-					strcpy(objects[++nof_objects], wrd);
+					strcpy(objects[++nof_objects].name, wrd);
 					if(display_messages)
 						cout << "Object '" << wrd << "' created."<< endl;
 					Operators[nof_operators].strips[prec_list][0].arguments[nof_args]=nof_objects;
@@ -752,7 +1132,7 @@ bool load_effects()
 					{
 						int i=1;
 						while (i<=nof_objects && !flag)
-							if (strcmp2(wrd, objects[i]))
+							if (strcmp2(wrd, objects[i].name))
 								flag=true;
 							else
 								i++;
@@ -760,7 +1140,7 @@ bool load_effects()
 							Operators[nof_operators].strips[add_list][nof_adds].arguments[nof_args]=i;
 						else
 						{
-							strcpy(objects[++nof_objects], wrd);
+							strcpy(objects[++nof_objects].name, wrd);
 							if(display_messages)
 								cout << "Object '" << wrd << "' created." << endl;
 							Operators[nof_operators].strips[add_list][nof_adds].arguments[nof_args]=nof_objects;
@@ -830,7 +1210,7 @@ bool load_effects()
 					{
 						int i=1;
 						while (i<=nof_objects && !flag)
-							if (strcmp2(wrd, objects[i]))
+							if (strcmp2(wrd, objects[i].name))
 								flag=true;
 							else
 								i++;
@@ -838,7 +1218,7 @@ bool load_effects()
 							Operators[nof_operators].strips[delete_list][nof_dels].arguments[nof_args]=i;
 						else
 						{
-							strcpy(objects[++nof_objects], wrd);
+							strcpy(objects[++nof_objects].name, wrd);
 							if(display_messages)
 								cout << "Object '" << wrd << "' created." << endl;
 							Operators[nof_operators].strips[delete_list][nof_dels].arguments[nof_args]=nof_objects;					
@@ -921,7 +1301,7 @@ bool load_effects()
 				{
 					int i=1;
 					while (i<=nof_objects && !flag)
-						if (strcmp2(wrd, objects[i]))
+						if (strcmp2(wrd, objects[i].name))
 							flag=true;
 						else
 							i++;
@@ -929,7 +1309,7 @@ bool load_effects()
 						Operators[nof_operators].strips[add_list][0].arguments[nof_args]=i;
 					else
 					{
-						strcpy(objects[++nof_objects], wrd);
+						strcpy(objects[++nof_objects].name, wrd);
 						if(display_messages)
 							cout << "Object '" << wrd << "' created." << endl;
 						Operators[nof_operators].strips[add_list][0].arguments[nof_args]=nof_objects;
@@ -1002,7 +1382,7 @@ bool load_effects()
 				{
 					int i=1;
 					while (i<=nof_objects && !flag)
-						if (strcmp2(wrd, objects[i]))
+						if (strcmp2(wrd, objects[i].name))
 							flag=true;
 						else
 							i++;
@@ -1010,7 +1390,7 @@ bool load_effects()
 						Operators[nof_operators].strips[delete_list][0].arguments[nof_args]=i;
 					else
 					{
-						strcpy(objects[++nof_objects], wrd);
+						strcpy(objects[++nof_objects].name, wrd);
 						if(display_messages)
 							cout << "Object '" << wrd << "' created." << endl;
 						Operators[nof_operators].strips[delete_list][0].arguments[nof_args]=nof_objects;					
@@ -1054,6 +1434,128 @@ bool load_effects()
 	}
 
 	// cout << "Effects loaded successfully." << endl;
+	return true;
+}
+
+
+
+bool load_consumption()
+{
+	resource_consumption* Resources=NULL;
+
+	char ch;
+	char wrd[max_sof_words+1];
+	ch=next_char();
+	while (ch=='(')
+	{
+		int Object_ID=0;
+		int Amount=0;
+
+		// reading keyword 'amount'
+		if (!next_word(wrd))
+		{
+			cout << "Unexpected characters or end of file while loading operator's " << Operators[nof_operators].name << " resources." << endl;
+			cout << "Keyword 'amount' expected." << endl;
+			return false;
+		}	
+		if (!strcmp2(wrd,"amount"))
+		{
+			cout << "Unexpected word: '" << wrd << "' while loading operator's " << Operators[nof_operators].name << " resources." << endl;
+			cout << "Keyword 'amount' expected." << endl;
+			return false;
+		}	
+		
+		// reading resource name
+		if (!next_word(wrd))
+		{
+			cout << "Unexpected characters or end of file while loading operator's " << Operators[nof_operators].name << " resources." << endl;
+			cout << "Resource name or variable expected." << endl;
+			return false;
+		}
+
+		bool flag=false;
+		if (wrd[0]=='?')
+		{ 
+			int i=1;
+			while (i<=ops_nof_parameters && !flag)
+				if (strcmp2(wrd, ops_parameters[i]))
+					flag=true;
+				else
+					i++;
+					
+			if (flag)
+				Object_ID=-i;
+			else
+			{
+				cout << "Unknown parameter name while loading operator's " << Operators[nof_operators].name << " effects." << endl;
+				return false;
+			}
+		}	// if (wrd[0]=='?')
+		else
+		{
+			int i=1;
+			while (i<=nof_objects && !flag)
+				if (strcmp2(wrd, objects[i].name))
+					flag=true;
+				else
+					i++;
+			
+			if (flag)
+				Object_ID=i;
+			else
+			{
+				strcpy(objects[++nof_objects].name, wrd);
+				if(display_messages)
+					cout << "Object '" << wrd << "' created." << endl;
+				Object_ID=nof_objects;					
+			}
+	
+			i=0;
+			bool found=false;
+			while (i<nof_resources && !found)
+				if (resources[i].object_ID==Object_ID)
+					found=true;
+				else	
+					i++;
+
+			if (!found)
+			{
+				resources[nof_resources++].object_ID=Object_ID;
+				if (display_messages)
+					cout << "Object " << objects[Object_ID].name << " has been characterized as a resource." << endl;
+			}
+		}
+
+
+		if (!next_number(&Amount))
+		{
+			cout << "Unexpected characters or end of file while loading operator's " << Operators[nof_operators].name << " resources." << endl;
+			cout << "Integer expected." << endl;
+			return false;
+		}	
+
+		if (Resources==NULL)
+		{
+			Operators[nof_operators].resources=new resource_consumption(Object_ID,Amount);
+			Resources=Operators[nof_operators].resources;
+		}
+		else
+		{
+			Resources->next=new resource_consumption(Object_ID,Amount);
+			Resources=Resources->next;
+		}
+
+		ch=next_char();
+		if (ch!=')')
+		{
+			cout << "Unexpected character: '" << ch << "' while loading operator's " << Operators[nof_operators].name << " resources." << endl;
+			cout << "Left bracket expected." << endl;
+			return false;
+		}
+		ch=next_char();
+	}
+
+	infile.seekg(-1, ios::cur);
 	return true;
 }
 
@@ -1140,7 +1642,7 @@ bool load_constants()
 		int i=1;
 		while (i<=nof_objects && !object_exists)
 		{
-			if (strcmp2(wrd, objects[i]))
+			if (strcmp2(wrd, objects[i].name))
 			{
 				object_exists=true;
 				if(display_messages)
@@ -1150,7 +1652,7 @@ bool load_constants()
 		}
 		if (!object_exists)
 		{
-			strcpy(objects[++nof_objects], wrd);
+			strcpy(objects[++nof_objects].name, wrd);
 			if(display_messages)
 				cout << "Object " << wrd << " created." << endl;
 		}
@@ -1191,14 +1693,17 @@ bool 	ignore_list()
 
 bool get_problem_header();
 bool load_objects();
+bool load_resources();
 bool load_initial();
-bool load_goal(state*);
+bool load_goal();
 
 
 bool load_problem()
 {
-	//infile.open(problem_file, ios::binary);
-	infile.open(problem_file, ios::in);
+	if (OSystem==1)
+		infile.open(problem_file, ios::binary);
+	else
+		infile.open(problem_file, ios::in);
 	char ch;
 	char wrd[max_sof_words+1];
 	if (!get_problem_header())
@@ -1232,6 +1737,14 @@ bool load_problem()
 					return false;
 				}
 			}
+			else if (strcmp2(wrd,"resources"))
+			{
+				if (!load_resources())
+				{
+					infile.close();
+					return false;
+				}
+			}
 			else if (strcmp2(wrd,"init"))
 			{
 				if (!load_initial())
@@ -1242,20 +1755,20 @@ bool load_problem()
 			}
 			else if (strcmp2(wrd,"goal"))
 			{
-				if(!load_goal(&goal))
+				if(!load_goal())
 				{
 					infile.close();
 					return false;
 				}
 			}
-			else if (strcmp2(wrd,"goal1"))
-			{
-				if(!load_goal(&goal1))
-				{
-					infile.close();
-					return false;
-				}
-			}
+//			else if (strcmp2(wrd,"goal1"))
+//			{
+//				if(!load_goal(&goal1))
+//				{
+//					infile.close();
+//					return false;
+//				}
+//			}
 			else
 			{
 				cout << endl << "Unknown keyword: '" << wrd << "'." << endl;
@@ -1398,7 +1911,7 @@ bool load_objects()
 		int i=1;
 		while (i<=nof_objects && !object_exists)
 		{
-			if (strcmp2(wrd, objects[i]))
+			if (strcmp2(wrd, objects[i].name))
 			{
 				object_exists=true;
 				if(display_messages)
@@ -1408,7 +1921,7 @@ bool load_objects()
 		}
 		if (!object_exists)
 		{
-			strcpy(objects[++nof_objects], wrd);
+			strcpy(objects[++nof_objects].name, wrd);
 			if(display_messages)
 				cout << "Object " << wrd << " created." << endl;
 		}
@@ -1423,13 +1936,60 @@ bool load_objects()
 	return true;
 }
 
+bool existing_resource(int Resource);
+
+bool load_resources()
+{
+	char ch;
+	char wrd[max_sof_words+1];
+	while (next_word(wrd))
+	{
+		bool object_exists=false;
+		int i=1;
+		while (i<=nof_objects && !object_exists)
+		{
+			if (strcmp2(wrd, objects[i].name))
+			{
+				object_exists=true;
+				if(display_messages)
+					cout << "Object " << wrd << " already existed." << endl;
+				if (!existing_resource(i))
+				{
+					resources[nof_resources++].object_ID=i;
+				}
+			}
+			i++;
+		}
+		if (!object_exists)
+		{
+			strcpy(objects[++nof_objects].name, wrd);
+			resources[nof_resources++].object_ID=nof_objects;
+			if(display_messages)
+				cout << "Resource object " << wrd << " created." << endl;
+		}
+	}
+	ch=next_char();
+	if (ch!=')')
+	{
+		cout << "ERROR: Unexpected character while loading resource objects' names." << endl;
+		cout << "Resource name or right bracket expected." << endl;
+		return false;
+	}
+
+	int i;
+	for (i=0;i<nof_resources;i++)
+		objects[resources[i].object_ID].resource=i;
+
+	return true;
+}
+
 
 bool load_initial()
 {
 	char ch;
 	char wrd[max_sof_words+1];
-	
-	initial2.nullify();
+	initial2=new state();
+	initial2->nullify();
 	ch=next_char();
 	while (ch=='(')
 	{
@@ -1439,46 +1999,88 @@ bool load_initial()
 		{
 			cout << "ERROR: Unexpected characters while loading initial state." << endl;
 			cout << "Predicata name expected." << endl;
-			initial2.nullify();
-			return false;
-		}
-		f.pred=P(wrd);
-		if (f.pred<0)
-		{
-			cout << "ERROR: Unknown predicate name, '" << wrd << "', while loading initial state." << endl;
-			initial2.nullify();
-			return false;
-		}
-		
-		int nof_args=0;
-		while (next_word(wrd))
-		{
-			f.arguments[nof_args]=O(wrd);
-			if (f.arguments[nof_args]==0)
-			{
-				cout << "ERROR: Unknown object name, '" << wrd << "', while loading initial state." << endl;
-				initial2.nullify();
-				return false;
-			}
-			nof_args++;
-		}
-		ch=next_char();
-		if (ch!=')')
-		{
-			cout << "ERROR: Unexpected character: '" << ch << "', while loading initial state." << endl;
-			cout << "Predicate's argument or right parenthesis expected." << endl;
-			initial2.nullify();
+			initial2->nullify();
 			return false;
 		}
 
-		if (nof_args!=predicates[f.pred].arity)
+
+		if (strcmp2(wrd,"amount"))
 		{
-			cout << "ERROR: Invalid number of arguments for predicate " << predicates[f.pred].name << "/";
-			cout << predicates[f.pred].arity << ", while loading initial state." << endl;
-			initial2.nullify();
-			return false;
+			if (!next_word(wrd))
+			{
+				cout << "ERROR: Unexpected characters while loading initial state." << endl;
+				cout << "Resource name expected." << endl;
+				initial2->nullify();
+				return false;
+			}
+
+			int r;
+			r=R(wrd);
+			if (r<0)
+			{
+				cout << "Wrong resource name: '"<< wrd << "', while loading initial state."<< endl;
+				initial2->nullify();
+				return false;
+			}
+			
+			int amount;
+			if (!next_number(&amount))
+			{
+				cout << "Cannot read resource amount, while loading initial state."<< endl;
+				initial2->nullify();
+				return false;
+			}
+			initial2->resource_vector[r]=amount;
+
+			ch=next_char();
+			if (ch!=')')
+			{
+				cout << "Unexpected character '" << ch << "', while loading initial state." << endl;
+				cout << "Right brucket expected." << endl;
+				initial2->nullify();
+				return false;
+			}
 		}
-		initial2.add_fact(f);
+		else	//	if (strcmp2(wrd,"amount")
+		{
+			f.pred=P(wrd);
+			if (f.pred<0)
+			{
+				cout << "ERROR: Unknown predicate name, '" << wrd << "', while loading initial state." << endl;
+				initial2->nullify();
+				return false;
+			}
+		
+			int nof_args=0;
+			while (next_word(wrd))
+			{
+				f.arguments[nof_args]=O(wrd);
+				if (f.arguments[nof_args]==0)
+				{
+					cout << "ERROR: Unknown object name, '" << wrd << "', while loading initial state." << endl;
+					initial2->nullify();
+					return false;
+				}
+				nof_args++;
+			}
+			ch=next_char();
+			if (ch!=')')
+			{
+				cout << "ERROR: Unexpected character: '" << ch << "', while loading initial state." << endl;
+				cout << "Predicate's argument or right parenthesis expected." << endl;
+				initial2->nullify();
+				return false;
+			}
+
+			if (nof_args!=predicates[f.pred].arity)
+			{
+				cout << "ERROR: Invalid number of arguments for predicate " << predicates[f.pred].name << "/";
+				cout << predicates[f.pred].arity << ", while loading initial state." << endl;
+				initial2->nullify();
+				return false;
+			}
+			initial2->add_fact(f);
+		}
 		ch=next_char();
 	}
 
@@ -1486,32 +2088,47 @@ bool load_initial()
 	{
 		cout << "ERROR: Unexpected character while loading initial state." << endl;
 		cout << "Left or right parenthesis expected." << endl;
-		initial2.nullify();
+		initial2->nullify();
 		return false;
 	}  
 	detect_constant_predicates();
-	initial.nullify();
+	initial=new state();
+	initial->nullify();
 	nof_constants=0;
+
 	int i;
-	for(i=0;i<initial2.size;i++)
-		if (constant_predicates[initial2.facts[i].pred])
-			constants[nof_constants++]=initial2.facts[i];
+	for(i=0;i<initial2->size;i++)
+		if (constant_predicates[initial2->facts[i].pred])
+			constants[nof_constants++]=initial2->facts[i];
 		else
-			initial.add_fact(initial2.facts[i]);
+			initial->add_fact(initial2->facts[i]);
+	
+	for(i=0;i<nof_resources;i++)
+		if (initial2->resource_vector[i]<0)
+		{
+			cout << "Initial state does not provide information for the initial amount of resource '" << objects[resources[i].object_ID].name << "'." << endl;
+			initial2->nullify();
+			initial->nullify();
+			return false;
+		}
+		else
+			initial->resource_vector[i]=initial2->resource_vector[i];
+
 	if(display_messages)
 	{
-		cout << "Initial state: " << initial2 << endl;
-		cout << "Reduced Initial state: " << initial << endl;
+		cout << "Initial state: " << *initial2 << endl;
+		cout << "Reduced Initial state: " << *initial << endl;
 		cout << "Initial state loaded successfully." << endl;
 	}
 	return true;
 }
 
 
-bool load_goal(state* goal)
+bool load_goal()
 {
 	char ch;
 	char wrd[max_sof_words+1];
+	goal=new state();
 	goal->nullify();
 
 
@@ -1668,3 +2285,12 @@ void	detect_constant_predicates()
 	}
 }
 
+
+bool existing_resource(int Resource)
+{
+	int i;
+	for(i=1;i<=nof_resources;i++)
+		if (resources[i].object_ID=Resource)
+			return true;
+	return false;
+}

@@ -1,35 +1,35 @@
- # include <iostream.h>
+# include <iostream.h>
 # include <string.h>
 # include <time.h>
 # include <sys/timeb.h>
 # include <fstream.h>
 # include <stdlib.h>
 # include <malloc.h>
+# include <math.h>
 
 #define MESS1 0
 
-#define MAX_TIME 30 // minutes
-
-#define	max_arity 8
+#define	max_arity 20
 #define sof_predicate_name 40	// Hereafter, sof_... means "size_of..."
-#define max_nof_predicates 30		// Hereafter, max... means max value of some parameter...
-#define sof_object_name 30
-#define	max_nof_objects 1000
-#define max_nof_operators0 20
-#define max_nof_operators 2000
-#define max_nof_parameters 8
+#define max_nof_predicates 1000		// Hereafter, max... means max value of some parameter...
+#define sof_object_name 60
+#define	max_nof_objects 2000
+#define	max_nof_resources 100
+#define max_nof_operators 20
+#define max_nof_parameters 12
 #define prec_list 0
 #define delete_list 1
 #define add_list 2
-#define max_sof_op_lists 10
+#define max_sof_op_lists 30
 #define sof_operator_name 50
 #define X -1
 #define Y -2
 #define Z -3
-#define max_nof_constants 2000
+#define max_nof_constants 3000
 #define agenda_hash_size 10000
 #define max_file_name 500
 #define max_sof_words 200
+#define CLOSE_LIST_HASH_SIZE 10000
 
 // FUNCTION PROTOTYPES: memory_manager
 class fact;
@@ -37,21 +37,35 @@ class action;
 class linked_hash_entry;
 class node;
 class state;
+class vector;
 
-void mem_init();
-fact* new_fact(fact);
-void delete_fact(fact*);
-linked_hash_entry* new_linked_hash_entry(linked_hash_entry);
-void delete_linked_hash_entry(linked_hash_entry*);
-extern action* new_action(action);
-extern void delete_action(action*);
-extern node* new_node(node);
-extern void delete_node(node*);
-extern state* new_state(state);
-extern void delete_state(state*);
+//void mem_init();
+//fact* new_fact(fact);
+//void delete_fact(fact*);
+//linked_hash_entry* new_linked_hash_entry(linked_hash_entry);
+//void delete_linked_hash_entry(linked_hash_entry*);
+//extern action* new_action(action);
+//extern void delete_action(action*);
+//extern node* new_node(node);
+//extern void delete_node(node*);
+//extern state* new_state(state);
+//extern void delete_state(state*);
 
 extern bool reduced_enriched;
+extern bool copy_from_initial;
+extern bool enriched_no_used;
+extern bool idle_flag;
+extern int max_time;
+extern int search_strategy;
+extern int OSystem;
+extern bool NO_RELATED;
+extern bool xor_enabled;
+extern bool xor_routines_flagl;
+extern bool enrich_initial;
+extern bool ignore_consumable_resources;
+extern bool no_xors;
 
+extern int appl_counter;
 extern clock_t ftime1;
 extern clock_t ftime2;
 extern clock_t ftime3;
@@ -69,14 +83,67 @@ extern char problem_file[max_file_name];
 extern char output_file[max_file_name];
 extern bool output_file_provided;
 
-class state;
-extern state initial;
-extern state goal;
-extern state goal1;
+
+extern state* initial;
+extern state* goal;
+
+extern action* solution;
 
 extern char problem_name[max_sof_words+1];
 
 extern bool display_messages;
+extern bool display_short_messages;
+
+class linked_bool
+{
+public:
+	bool value;
+	linked_bool* next;
+
+	linked_bool()
+	{
+		value=false;
+		next=NULL;
+	}
+
+	linked_bool(linked_bool* n)
+	{
+		value=false;
+		next=n;
+	}
+};
+
+
+class object
+{
+public:
+	char name[sof_object_name+1];
+	linked_bool* idle;
+	int resource;
+	int consumable_resource;
+
+	object()
+	{
+		strcpy(name,"");
+		idle=NULL;
+		resource=-1;
+		consumable_resource=-1;
+	}
+
+	object(char n[sof_object_name+1])
+	{
+		strcpy(name,n);
+		idle=NULL;
+		resource=-1;
+		consumable_resource=-1;
+	}
+
+	friend ostream& operator << (ostream& stream, object& o)
+	{
+		stream << o.name;
+		return stream;
+	}
+};
 
 struct	predicate
 {
@@ -84,23 +151,33 @@ struct	predicate
 	char name[sof_predicate_name+1];
 };
 
+class Resource;
+
 extern int nof_predicates;
 extern predicate predicates[max_nof_predicates];
 extern bool	constant_predicates[max_nof_predicates];
 extern int nof_objects;
-extern char	objects[max_nof_objects][sof_object_name+1];
+extern object objects[max_nof_objects];
+extern int nof_resources;
+extern Resource resources[max_nof_resources];
+extern int nof_consumable_resources;
+extern int consumable_resources[max_nof_resources];
+
+extern vector* init_vector;
 
 int O(char name[]);
 int P(char name[]);
-
+int R(char name[]);
+int R_ID(int Object_ID);
 
 extern int	nof_facts;
-extern int	nof_inverted_actions;
+extern int  nof_actions;
 extern int	nof_set_facts;
 extern int	nof_applied_inverted_actions;
 
+extern int  nof_enabled_facts;
 
-class	fact
+class fact
 {
 public:
 	int pred;
@@ -175,7 +252,7 @@ public:
 		f.pred=pred;
 		int i;
 		for(i=0;i<predicates[pred].arity;i++)
-			if (arguments[i]>0)
+			if (arguments[i]>=0)
 				f.arguments[i]=arguments[i];
 			else
 				f.arguments[i]=parameters[-arguments[i]-1];
@@ -238,6 +315,20 @@ public:
 		return *this;
 	}
 
+	bool enabled()
+	{
+		int i=0;
+		bool flag=true;
+		while (i<predicates[pred].arity && flag)
+		{
+			if (objects[arguments[i]].idle->value)
+				flag=false;
+			else
+				i++;
+		}
+		return flag;
+	}
+
 	friend ostream& operator << (ostream& stream, fact& f)
 	{
 		stream << predicates[f.pred].name;
@@ -247,12 +338,12 @@ public:
 			int i;
 			for(i=0;i<predicates[f.pred].arity-1;i++)
 				if (f.arguments[i]>0)
-					stream << objects[f.arguments[i]] <<',';
+					stream << objects[f.arguments[i]].name <<',';
 				else
 					stream << "V" << -f.arguments[i] <<',';
 			if (i<predicates[f.pred].arity)
 				if (f.arguments[i]>0)
-					stream << objects[f.arguments[i]];
+					stream << objects[f.arguments[i]].name;
 				else
 					stream << "V" << -f.arguments[i];
 			stream << ')';
@@ -291,13 +382,214 @@ public:
 
 bool is_a_constant(fact f);	// This function checks if fact f is included in the list of constants
 
-class	Operator
+
+class resource_consumption
+{
+public:
+	int object_ID;
+	int amount;
+	resource_consumption* next;
+
+	resource_consumption()
+	{
+		object_ID=0;
+		amount=0;
+		next=NULL;
+	}
+
+	resource_consumption(int ID, int A)
+	{
+		object_ID=ID;
+		amount=A;
+		next=NULL;
+	}
+
+	resource_consumption(int ID, int A, resource_consumption* N)
+	{
+		object_ID=ID;
+		amount=A;
+		next=N;
+	}
+		
+	resource_consumption(resource_consumption* N)
+	{
+		object_ID=0;
+		amount=0;
+		next=N;
+	}
+		
+	resource_consumption operator = (resource_consumption R)
+	{
+		object_ID=R.object_ID;
+		amount=R.amount;
+		next=R.next;
+		return *this;
+	}
+};
+
+// This class refers to the consumable resources only,
+// not to the entire resources.
+// Note that the first element of the table "elements" is the 
+// distance from the goal, in the heuristic computation.
+class vector
+{
+public:
+	int* elements;
+	bool* mins;
+
+	vector()
+	{
+		elements=new int[nof_consumable_resources+1];
+		mins=new bool[nof_consumable_resources+1];
+		int i;
+		for(i=0;i<=nof_consumable_resources;i++)
+		{
+			elements[i]=0;
+			mins[i]=true;
+		}
+	}
+
+	vector(int* el)
+	{
+		elements=new int[nof_consumable_resources+1];
+		mins=new bool[nof_consumable_resources+1];
+		int i;
+		for(i=0;i<=nof_consumable_resources;i++)
+		{
+			elements[i]=el[i];
+			mins[i]=true;
+		}
+	}
+
+	void nullify()
+	{
+		int i;
+		for(i=0;i<=nof_consumable_resources;i++)
+		{
+			elements[i]=0;
+		}
+	}
+
+	vector operator + (vector v)
+	{
+		vector result;
+		int i;
+		for(i=0;i<=nof_consumable_resources;i++)
+			result.elements[i]=elements[i]+v.elements[i];
+		return result;
+	}
+
+	vector operator = (vector v)
+	{
+		int i;
+		for(i=0;i<=nof_consumable_resources;i++)
+		{
+			elements[i]=v.elements[i];
+			mins[i]=v.mins[i];
+		}
+		return *this;
+	}
+
+	// v1<v2 iff: 
+	//	for every i: v1[i]<=v2[i]
+	//	and there is at least one j: v1[j]<v2[j].
+	bool operator < (vector* v)
+	{
+		bool flag1=true;
+		bool flag2=false;
+		int i=0;
+		while (i<=nof_consumable_resources && flag1)
+		{
+			if (elements[i]<v->elements[i]) 
+				flag2=true;
+			if (elements[i]>v->elements[i])
+				flag1=false;
+			i++;
+		}
+		return (flag1 && flag2);
+	}
+
+	// v1<=v2 iff: 
+	//	for every i: v1[i]<=v2[i]
+	bool operator <= (vector* v)
+	{
+		bool flag;
+		flag=true;
+		int i=0;
+		while (i<=nof_consumable_resources && flag)
+		{
+			if (elements[i]>v->elements[i])
+				flag=false;
+			else
+				i++;
+		}
+		return flag;
+	}
+
+
+	bool operator == (vector* v)
+	{
+		bool flag;
+		flag=true;
+		int i=0;
+		while (i<=nof_consumable_resources && flag)
+		{
+			if (elements[i]!=v->elements[i])
+				flag=false;
+			else
+				i++;
+		}
+		return flag;
+	}
+
+
+	friend ostream& operator << (ostream& stream, vector& v)
+	{
+		stream << "[";
+		int i;
+		for (i=0;i<=nof_consumable_resources-1;i++)
+			stream << v.elements[i] << "-";
+		stream << v.elements[i] << "]";
+		return stream;
+	}
+};
+
+void max(vector* v1, vector* v2, vector* v);
+void min(vector* v1, vector* v2, vector* v);
+void sum(vector* v1, vector* v2, vector* v);
+
+class Resource
+{
+public:
+	int object_ID;		// The ID of the object, in the 'objects' table, 
+						// that corresponds to that resource.
+	short int type;		// 1: the resource can only be consumed.
+						// 2: the resource can either be consumed or produced.
+	int consumable_ID;
+	Resource()
+	{
+		object_ID=0;
+		type=1;
+		consumable_ID=-1;
+	}
+
+	Resource(int ID, short int T)
+	{
+		object_ID=ID;
+		type=T;
+		consumable_ID=-1;
+	}
+};
+
+
+class Operator
 {
 public:
 	char name[sof_operator_name+1];
 	int nof_parameters;					// nof_parameters must be less than max_nof_parameters
 	int sof_lists[3];
 	fact strips[3][max_sof_op_lists];
+	resource_consumption* resources;
 
 	Operator()			// default constructor
 	{
@@ -305,6 +597,7 @@ public:
 		nof_parameters=0;
 		int i;
 		for(i=0;i<3;i++) sof_lists[i]=0;
+		resources=NULL;
 	}
 
 	Operator(char nm[sof_operator_name+1],int nof_param,
@@ -324,6 +617,7 @@ public:
 			for(j=0;j<sof_lists[i];j++)
 				strips[i][j]=s[i][j];
 		}
+		resources=NULL;
 	}
 
 
@@ -338,6 +632,23 @@ public:
 		for(i=0;i<3;i++)
 			for(j=0;j<max_sof_op_lists;j++)
 				strips[i][j]=OP.strips[i][j];
+
+		resource_consumption* R=OP.resources;
+		resource_consumption* R_last=NULL;
+		while (R!=NULL)
+		{
+			if (R_last==NULL)
+			{
+				resources=new resource_consumption(R->object_ID,R->amount, resources);
+				R_last=resources;
+			}
+			else
+			{
+				R_last->next=new resource_consumption(R->object_ID,R->amount, resources);
+				R_last=R_last->next;
+			}
+			R=R->next;
+		}
 		return *this;
 	}
 
@@ -353,27 +664,50 @@ public:
 		stream << "Preconditions list: ";			// Display preconditions list
 		for(i=0;i<op.sof_lists[prec_list]-1;i++)
 			stream << op.strips[prec_list][i] <<", ";
-		stream << op.strips[prec_list][i] <<endl;
+		if (i==op.sof_lists[prec_list]-1)
+			stream << op.strips[prec_list][i];
+		cout << endl;
 		stream << "delete list: ";			// Display delete list
 		for(i=0;i<op.sof_lists[delete_list]-1;i++)
 			stream << op.strips[delete_list][i] <<", ";
-		stream << op.strips[delete_list][i] <<endl;
+		if (i==op.sof_lists[delete_list]-1)
+			stream << op.strips[delete_list][i];
+		cout << endl;
 		stream << "Add list: ";			// Display add list
 		for(i=0;i<op.sof_lists[add_list]-1;i++)
 			stream << op.strips[add_list][i] <<", ";
-		stream << op.strips[add_list][i] <<endl;
+		if (i==op.sof_lists[add_list]-1)
+			stream << op.strips[add_list][i];
+		cout << endl;
+
+		stream << "Resources: ";
+		resource_consumption* R;
+		R=op.resources;
+		while (R!=NULL)
+		{
+			cout << "amount(";
+			if (R->object_ID<0)
+				cout << "V" << -R->object_ID << ", ";
+			else if (R->object_ID>0)
+				cout << objects[R->object_ID].name << ", ";
+			else
+				cout << "NULL_OBJECT, ";
+			cout << R->amount;
+			if (R->next!=NULL)
+				cout << "), ";
+			else
+				cout << ")";
+			R=R->next;
+		}	
+		cout << endl;
 		return stream;
 	}
-
-
 };
 
 extern Operator* Operators;
-extern Operator* Operators0;
 extern Operator* Inv_Operators;
 extern Operator* Normal_Operators;
 extern int nof_operators;
-extern int nof_operators0;
 
 class action
 {
@@ -402,26 +736,26 @@ public:
 		next=n;
 	}
 
-	action operator = (action act)
+	action operator = (action* act)
 	{
-		operator_id=act.operator_id;
+		operator_id=act->operator_id;
 		int i;
 		for(i=0;i<max_nof_parameters;i++)
-			parameters[i]=act.parameters[i];
-		next=act.next;
+			parameters[i]=act->parameters[i];
+		next=act->next;
 		return *this;
 	}
 
-	bool operator == (action act2)
+	bool operator == (action* act2)
 	{
-		if (operator_id!=act2.operator_id)
+		if (operator_id!=act2->operator_id)
 			return false;
 		else
 		{
 			int nof_param=Operators[operator_id].nof_parameters;
 			int i;
 			for(i=0;i<nof_param;i++)
-				if (parameters[i]!=act2.parameters[i])
+				if (parameters[i]!=act2->parameters[i])
 					return false;
 		}
 		return true;
@@ -432,33 +766,122 @@ public:
 		stream << "(" << Operators[step.operator_id].name ;			// Display name
 		int i;
 		for(i=0;i<Operators[step.operator_id].nof_parameters;i++)
-			stream << " " << objects[step.parameters[i]];				// Display parameters
+			stream << " " << objects[step.parameters[i]].name;				// Display parameters
 		stream << ")";
 		return stream;
 	}
 };
 
 
-class	inverted_action
+class linked_action
 {
 public:
-	action step;
+	action* step;
+	linked_action* next;
+
+	linked_action()
+	{
+		step=NULL;
+		next=NULL;
+	}
+};
+
+extern action* all_actions;
+
+void delete_linked_hash_entry_list(linked_hash_entry*);
+
+class linked_linked_distances;
+class inverted_action;
+
+class inverted_distance
+{
+public:
+	vector* v_distance;
+	bool should_be_deleted;		// this flag indicates that this distance is worse
+								// than another distance of this inverted action,
+								// so it should be deleted. If this distance has not been applied yet,
+								// it can be deleted, otherwise not...
+	bool has_been_applied;		// this flag indicates that this distance has been applied in a previous
+								// application of the operator, so there is no reason to 
+								// re-apply it...
+	linked_hash_entry* keep;
+
+	linked_linked_distances* prec_distances;// In this field is kept a linked list
+											// of the supporting cost vectors for
+											// this action's cost. This is used by
+											// the XOR routines, to construct the
+											// fact chains...
+											// This field is currently not used...
+	inverted_action* inv_action;			// This field points to the inverted_action,
+											// where this inverted_distance belongs. Also 
+											// this field is used by the XOR routines,
+											// but only for presentation purposes (actually
+								// it is not necessary to know by which action has been achieved a fact,
+								// since we know the preconditions of this action.
+								// Currently this field is not used...
+	inverted_distance* next;
+
+	inverted_distance()
+	{
+		v_distance=NULL;
+		should_be_deleted=false;
+		has_been_applied=false;
+		keep=NULL;
+		prec_distances=NULL;
+		inv_action=NULL;
+		next=NULL;
+	}
+
+	inverted_distance(inverted_distance* n)
+	{
+		v_distance=NULL;
+		should_be_deleted=false;
+		has_been_applied=false;
+		keep=NULL;
+		prec_distances=NULL;
+		inv_action=NULL;
+		next=n;
+	}
+};
+
+
+// ATTENTION: IF WE WOULD LIKE TO COMPUTE NOT ALL THE DISTANCES AT ONCE, 
+// BUT COMPUTE ONLY THE NECESSARY DISTANCES AT THE PREPROCESSING PHASE AND THE OTHER DISTANCES
+// ON DEMAND, THEN INVERTED ACTIONS SHOULD HAVE LINKED FIELDS FOR 'DISTANCE', 'KEEP' 
+// AND 'IN_AGENDA'.
+// IT IS EASY TO BE DONE...
+
+class inverted_action
+{
+public:
+	action* step;
 	linked_hash_entry* precs; // A linked list to the preconditions of the action.
 	bool in_agenda;
-	int score;
-	linked_hash_entry* keep;
+	inverted_distance* distances;
+	vector* inverted_action_cost;
 	inverted_action* next;	// all the inverted action construct a list, so it is possible
 							// to delete them...
 
-	inverted_action(action act)
+	bool applied;
+	inverted_action(action* act)
 	{
 		step=act;
 		precs=NULL;
 		in_agenda=false;
-		score=-1;
-		keep=NULL;
+		distances=NULL;
+		inverted_action_cost=NULL;
+		applied=false;
 		next=NULL;
 	}
+
+	/*
+	~inverted_action()
+	{
+		delete_linked_hash_entry_list(precs);
+		delete_linked_hash_entry_list(keep);
+	}
+	*/
+
 };
 
 
@@ -480,6 +903,12 @@ public:
 		inverted_step=a;
 		next=NULL;
 	}
+
+	linked_inverted_action(linked_inverted_action* n)
+	{
+		inverted_step=NULL;
+		next=n;
+	}
 };
 
 
@@ -487,26 +916,50 @@ public:
 bool instantiable_with_list(fact f, int sof_list, fact list_of_facts[]);
 
 
-class	node;
-class	agenda;
+class node;
+class agenda;
 
-class	state
+
+class hash_entry;
+hash_entry* get_fact_pointer(fact*);
+
+class state
 {
 public:
 	int size;
 	fact* facts;
+	int* resource_vector;
 
 	state()
 	{
 		size=0;
 		facts=NULL;
+		if (nof_resources>0)
+		{
+			resource_vector=new int[nof_resources];
+			int i;
+			for (i=0;i<nof_resources;i++)
+				resource_vector[i]=-1;
+		}
+		else
+			resource_vector=NULL;
 	}
 
 	state( int sz, fact* f)
 	{
 		size=sz;
 		facts=f;
+		if (nof_resources>0)
+		{
+			resource_vector=new int[nof_resources];
+			int i;
+			for (i=0;i<nof_resources;i++)
+				resource_vector[i]=-1;
+		}
+		else
+			resource_vector=NULL;
 	}
+
 
 	void nullify()
 	{
@@ -514,6 +967,12 @@ public:
 			delete facts;
 		facts=NULL;
 		size=0;
+		if (nof_resources>0)
+		{
+			int i;
+			for(i=0;i<nof_resources;i++)
+				resource_vector[i]=-1;
+		}
 	}
 
 	void add_fact(fact f)
@@ -527,6 +986,17 @@ public:
 		delete facts;
 		facts=facts2;
 	}
+	
+	void set_resource(int Resource, int Amount)
+	{
+		if (Resource<0 || Resource>=nof_resources)
+		{
+			cout << "ERROR: Illegal resource ID, while calling state.set_resource." << endl;
+			abort();
+		}
+		resource_vector[Resource]=Amount;
+	}
+
 
 	state operator = (state s2)
 	{
@@ -537,6 +1007,14 @@ public:
 		 int i;
 		for(i=0;i<size;i++)
 			facts[i]=s2.facts[i];
+		if (nof_resources>0)
+		{
+			delete resource_vector;		// These two instructions may be not needed, because resource_vectors
+			resource_vector=new int[nof_resources];	// have constant size equal to nof_resources...
+		
+			for(i=0;i<nof_resources;i++)
+				resource_vector[i]=s2.resource_vector[i];
+		}
 		return *this;
 	}
 
@@ -546,7 +1024,7 @@ public:
 			return false;
 		else
 		{
-			 int i=0;
+			int i=0;
 			bool flag1=true;
 			while (i<size && flag1)
 			{
@@ -561,6 +1039,16 @@ public:
 				flag1=flag2;
 				i++;
 			}
+
+// We say that two states are equal, even if they do not have the same resource vectors...
+//			i=0;
+//			while (i<nof_resources && flag1)
+//			{
+//				if (resource_vector[i]!=s2->resource_vector[i])
+//					flag1=false;
+//				i++;
+//			}
+
 			return flag1;
 		}
 	}
@@ -603,10 +1091,14 @@ public:
 	{
 		stream << "[";
 		 int i;
-		for(i=0;i<s.size-1;i++)
+		for(i=0;i<s.size;i++)
 			stream << * (s.facts + i) << ", ";
-		if (i<s.size)
-			stream << * (s.facts + i);
+		for(i=0;i<nof_resources;i++)
+		{
+			stream << objects[resources[i].object_ID].name << ":" << s.resource_vector[i];
+			if (i<nof_resources-1)
+				stream << ", ";
+		}
 		stream << "]";
 		return stream;
 	}
@@ -614,14 +1106,15 @@ public:
 	// this function checks if an action (==ground operator) is applicable to the current state
 	// WARNING: This function does not check the constants of the operator. It checks only 
 	// if the preconditions are included in the state
-	bool applicable(action step)
+	// WARNING2: THIS FUNCTION DOES NOT CHECK THE RESOURCES OF THE ACTION!!!
+	bool applicable(action* step)
 	{
 		fact prec[max_sof_op_lists];
-		int nof_prec=Operators[step.operator_id].sof_lists[prec_list];
+		int nof_prec=Operators[step->operator_id].sof_lists[prec_list];
 		int i;
 		for(i=0;i<nof_prec;i++)
 		{
-			fact f=Operators[step.operator_id].strips[prec_list][i].instantiate(step.parameters);
+			fact f=Operators[step->operator_id].strips[prec_list][i].instantiate(step->parameters);
 			if (!included(f))
 				if (!is_a_constant(f))
 					return false;
@@ -630,130 +1123,14 @@ public:
 	}
 
 
-	// this function checks if all the integers, between vars[0] and vars[j], are distinct
-	inline bool all_different(int j, int vars[max_nof_parameters])
+void space(int j)
+{
+	while (j>0)
 	{
-		int i;
-		for(i=0;i<j;i++)
-		{
-			int k;
-			for(k=i+1;k<=j;k++)
-				if (vars[i]==vars[k])
-					return false;
-		}
-		return true;
+		cout << "     ";
+		j--;
 	}
-
-
-	inline bool check_preconditions(int j, int vars[max_nof_parameters], int oper_id)
-	{
-		int i;
-		for(i=0;i<Operators[oper_id].sof_lists[prec_list];i++)
-		{
-			bool relative=false;
-			fact prec=Operators[oper_id].strips[prec_list][i];
-			int k;
-			for(k=0;k<predicates[prec.pred].arity;k++)
-			{
-				if (prec.arguments[k]==-j-1) relative=true;
-				if (prec.arguments[k]<0 && prec.arguments[k]>=-j-1)
-					prec.arguments[k]=vars[-prec.arguments[k]-1];
-			}
-			if (relative && !instantiable_with_list(prec, size, facts)
-					&& !instantiable_with_list(prec, nof_constants, constants))
-				return false;
-		}
-		return true;
-	}
-
-
-	inline void next_value(int j, int vars[max_nof_parameters], int oper_id)
-	{
-		bool found=false;
-		while (vars[j]<=nof_objects && !found)
-		{
-			vars[j]++;
-			if (all_different(j, vars))
-					if (check_preconditions(j,vars, oper_id))
-						found=true;
-		}
-	}
-
-	action* applicable()
-	{
-		action* first_action=NULL;
-		action* act1_ptr=NULL;
-		action* act2_ptr=NULL;
-		int vars[max_nof_parameters];	// the values that take the parameters of the operator
-		int oper_id;
-		for(oper_id=0;oper_id<nof_operators;oper_id++)	// oper_id: the operator position
-		{													// in table Operators
-			int j;
-			for(j=0;j<max_nof_parameters;j++) vars[j]=0;
-			if (Operators[oper_id].nof_parameters>0)
-			{
-				j=0;
-				while (j>=0)
-				{
-					next_value(j, vars, oper_id);
-					if (vars[j]<=nof_objects)
-					{
-						j++;
-						if (j==Operators[oper_id].nof_parameters)
-						{
-							j--;
-							act1_ptr=act2_ptr;
-							act2_ptr=new_action(action(oper_id, vars));
-							if (act1_ptr==NULL)
-								first_action=act2_ptr;
-							else
-								act1_ptr->next=act2_ptr;
-						}
-					}
-					else
-					{
-						vars[j]=0;
-						j--;
-					}
-				}				// end while j>=0
-			}
-			else	// if (Operators[oper_id].nof_parameters>0) 
-			{
-				bool satisfied=true;
-				int prec_no=0;
-				while (satisfied && prec_no<Operators[oper_id].sof_lists[prec_list])
-				{	
-					 int counter;
-					satisfied=false;
-					counter=0;
-					while (!satisfied && counter<size)
-					{
-						if (Operators[oper_id].strips[prec_list][prec_no]==facts[counter])
-							satisfied=true;
-						else
-							counter++;
-					}
-					prec_no++;
-				}
-				if (satisfied)
-				{
-					act1_ptr=act2_ptr;
-					act2_ptr=new_action(action(oper_id, vars));
-					if (act1_ptr==NULL)
-						first_action=act2_ptr;
-					else
-						act1_ptr->next=act2_ptr;
-				}	// if satisfied
-			}	// (Operators[oper_id].nof_parameters>0)
-		}
-		return first_action;
-	}
-
-	void space(int j)
-	{
-		for (int i=0;i<j;i++)
-			cout << "    ";
-		}
+}
 
 	bool instantiate_prec(int oper_id, int j, int vars[max_nof_parameters], 
 		int back_points[max_sof_op_lists], int instantiated_by[max_sof_op_lists],
@@ -854,24 +1231,25 @@ public:
 				for(k=0;k<arity;k++)
 				{
 					if (max_inst<order_ind[k] && order_ind[k]<j) max_inst=order_ind[k];
-					// if the argument is a constant
-					if (cur_prec.arguments[order_to_check[k]]>0 )
-					{
-						if (cur_prec.arguments[order_to_check[k]] != sfacts[i].arguments[order_to_check[k]])
-							possible=false;
-					}
+					
+					if (objects[sfacts[i].arguments[order_to_check[k]]].idle->value)
+						possible=false;
 					else
-					{	
-						// if the argument is a variable that is already instantiated
-						if (vars[-cur_prec.arguments[order_to_check[k]]-1]>0)
+					{
+						// if the argument is a constant
+						if (cur_prec.arguments[order_to_check[k]]>0 )
 						{
-							if (vars[-cur_prec.arguments[order_to_check[k]]-1] != sfacts[i].arguments[order_to_check[k]])
+							if (cur_prec.arguments[order_to_check[k]] != sfacts[i].arguments[order_to_check[k]])
 								possible=false;
 						}
-						else	// the argument is a variable that is not already instantiated
-						{
-							
-							k++;
+						else
+						{	
+							// if the argument is a variable that is already instantiated
+							if (vars[-cur_prec.arguments[order_to_check[k]]-1]>0)
+							{
+								if (vars[-cur_prec.arguments[order_to_check[k]]-1] != sfacts[i].arguments[order_to_check[k]])
+									possible=false;
+							}
 						}
 					}
 				}
@@ -932,20 +1310,23 @@ public:
 		return instantiable;
 	}
 
-	action* applicable2()
+	
+
+	action* applicable()
 	{
+		appl_counter++;
 		action* first_action=NULL;
 		action* act1_ptr=NULL;
 		action* act2_ptr=NULL;
 		int vars[max_nof_parameters];	// the values that take the parameters of the operator
 		int back_points[max_sof_op_lists];
-		//int max_inst[max_sof_op_lists];
 		int instantiated_by[max_sof_op_lists];
 
 		int oper_id;
 		for (oper_id=0;oper_id<nof_operators;oper_id++)
 		{
 			int j;
+			//cout << Operators[oper_id] << endl;
 			// initialization steps
 			for (j=0;j<max_nof_parameters;j++) vars[j]=0;
 			if (Operators[oper_id].nof_parameters>0)
@@ -995,14 +1376,83 @@ public:
 							}
 							i1++;
 						}
+
+						// In case where there are parameters that are identical,
+						// we check if the add and the delete effects are equivalent.
+						// If they are not, then the action is kept, otherwise it is rejected.
+						if (!all_dif)
+						{
+							bool beto=false;
+							int i=0;
+							while (i<Operators[oper_id].sof_lists[add_list] && !beto)
+							{
+								fact f=Operators[oper_id].strips[add_list][i].instantiate(vars);
+								hash_entry* h=get_fact_pointer(&f);
+								if (h==NULL)
+									beto=true;
+								else
+									i++;
+							}
+
+							if (!beto)
+							{
+								int add_id=Operators[oper_id].sof_lists[add_list]-1;
+								int del_id=Operators[oper_id].sof_lists[delete_list]-1;
+								if (del_id!=add_id) all_dif=true;
+							
+								while (add_id>=0 && !all_dif)
+								{
+									del_id=Operators[oper_id].sof_lists[delete_list]-1;
+									fact add_fact=Operators[oper_id].strips[add_list][add_id].instantiate(vars);
+									bool found=false;
+									while (del_id>=0 && !found)
+									{
+										fact del_fact=Operators[oper_id].strips[delete_list][del_id].instantiate(vars);
+										if (add_fact==del_fact)
+											found=true;
+										else
+											del_id--;
+									}
+									if (!found)
+										all_dif=true;
+									else
+										add_id--;
+								}
+							}
+						}
 				
-						if (all_dif)
+
+						// HERE A CHECK FOR ENOUGH RESOURCES IS PERFORMED.
+						// THE PLACE IS THE EASIEST (FOR THE PROGRAMMER) 
+						// BUT THE WORSE (FOR EFFICIENCY) TO PERFORM THIS TEST.
+						// THE BEST PLACE IS TO PERFORM THE TEST CONCURRENTLY
+						// WITH THE INSTANTIATION OF THE OPERATOR'S VARIABLES...
+						bool resources_enough=true;
+						resource_consumption* r;
+						r=Operators[oper_id].resources;
+						while (r!=NULL && resources_enough)
+						{
+							if (r->amount>0)
+							{
+								if (r->object_ID>0)
+								{
+									if (resource_vector[R_ID(r->object_ID)]<r->amount)
+										resources_enough=false;
+								}	
+								else if (r->object_ID<0)
+									if (resource_vector[R_ID(vars[-r->object_ID-1])]<r->amount)
+										resources_enough=false;
+							}
+							r=r->next;
+						}
+
+						if (all_dif && resources_enough)
 						{
 							#if MESS1
-							space(j);cout << "Success" << endl;
+							cout << "Success" << endl;
 							#endif
 							act1_ptr=act2_ptr;
-							act2_ptr=new_action(action(oper_id, vars));
+							act2_ptr=new action(oper_id, vars);
 							#if MESS1
 							cout << *act2_ptr<< endl;
 							#endif
@@ -1016,7 +1466,7 @@ public:
 					else
 					{
 						#if MESS1
-						space(j);cout << "Fail:" << Operators[oper_id].strips[prec_list][j].instantiate(vars) << endl;
+						cout << "Fail:" << Operators[oper_id].strips[prec_list][j].instantiate(vars) << endl;
 						#endif
 						if (max_instantiated>=0)
 						{
@@ -1027,7 +1477,7 @@ public:
 							{
 								back_points[i1]=-1;
 								#if MESS1
-								space(i1);cout << "Deallocate: " << Operators[oper_id].strips[prec_list][i1] << endl;							
+								cout << "Deallocate: " << Operators[oper_id].strips[prec_list][i1] << endl;							
 								#endif
 								int i2;
 								for (i2=0;i2<max_nof_parameters;i2++)
@@ -1048,7 +1498,7 @@ public:
 				int prec_no=0;
 				while (satisfied && prec_no<Operators[oper_id].sof_lists[prec_list])
 				{	
-					 int counter;
+					int counter;
 					satisfied=false;
 					counter=0;
 					while (!satisfied && counter<size)
@@ -1060,10 +1510,33 @@ public:
 					}
 					prec_no++;
 				}
-				if (satisfied)
+
+
+				bool resources_enough=true;
+				resource_consumption* r;
+				r=Operators[oper_id].resources;
+				while (r!=NULL && resources_enough)
+				{
+					if (r->amount>0)
+					{
+						if (r->object_ID>0)
+						{
+							if (resource_vector[R_ID(r->object_ID)]<r->amount)
+								resources_enough=false;
+						}	
+						else 
+						{
+							cout << "ERROR 38474384024820420" << endl;
+							abort();
+						}
+					}		
+					r=r->next;
+				}
+				
+				if (satisfied & resources_enough)
 				{
 					act1_ptr=act2_ptr;
-					act2_ptr=new_action(action(oper_id, vars));
+					act2_ptr=new action(oper_id, vars);
 					if (act1_ptr==NULL)
 						first_action=act2_ptr;
 					else
@@ -1074,11 +1547,11 @@ public:
 		return first_action;
 	}
 
-	state* next_state(action step)
+	state* next_state(action* step)
 	{
 		int new_size=size
-				- Operators[step.operator_id].sof_lists[delete_list]
-				+ Operators[step.operator_id].sof_lists[add_list];
+				- Operators[step->operator_id].sof_lists[delete_list]
+				+ Operators[step->operator_id].sof_lists[add_list];
 		
 		fact* new_facts=new fact[new_size];
 		int k=0;
@@ -1087,23 +1560,45 @@ public:
 		{
 			bool flag=true;
 			int j=0;
-			while (j<Operators[step.operator_id].sof_lists[delete_list]
+			while (j<Operators[step->operator_id].sof_lists[delete_list]
 					&& flag)
-				if (facts[i]==Operators[step.operator_id].strips[delete_list][j].instantiate(step.parameters))
+				if (facts[i]==Operators[step->operator_id].strips[delete_list][j].instantiate(step->parameters))
 					flag=false;
 				else
 					j++;
 			if (flag)
+			{
 				new_facts[k++]=facts[i];
+//				cout << new_facts[k-1] << endl;
+			}
+			else
+			{
+//				cout << "Fact Removed: " << facts[i] << endl;
+//				cout << endl;
+			}
 		}
 		int j;
-		for(j=0;j<Operators[step.operator_id].sof_lists[add_list];j++)
-			new_facts[k++]=Operators[step.operator_id].strips[add_list][j].instantiate(step.parameters);
-	state* new_s=new_state(state(new_size, new_facts));
-	return new_s;
+		for(j=0;j<Operators[step->operator_id].sof_lists[add_list];j++)
+		{
+			new_facts[k++]=Operators[step->operator_id].strips[add_list][j].instantiate(step->parameters);
+//			cout << new_facts[k-1] << endl;
+		}
+		state* new_s=new state(k, new_facts);
+
+		for(i=0;i<nof_resources;i++)
+			new_s->resource_vector[i]=resource_vector[i];
+		resource_consumption* r;
+		r=Operators[step->operator_id].resources;
+		while (r!=NULL)
+		{
+			if (r->object_ID>0)
+				new_s->resource_vector[R_ID(r->object_ID)] -= r->amount;
+			else
+				new_s->resource_vector[R_ID(step->parameters[-r->object_ID-1])] -=r->amount;
+			r=r->next;
+		}
+		return new_s;
 	}
-
-
 };
 
 
@@ -1112,11 +1607,15 @@ class node
 public:
 	state* s;
 	action step;
+	vector* v_distance;
+	linked_linked_distances* end_facts;
 	node* previous;
+
 
 	node()
 	{
 		s=NULL;
+		v_distance=NULL;
 		previous=NULL;
 	}
 
@@ -1124,6 +1623,7 @@ public:
 	{
 		s=s1;
 		step=st;
+		v_distance=NULL;
 		previous=prev;
 	};
 
@@ -1131,6 +1631,7 @@ public:
 	{
 		s=n.s;
 		step=n.step;
+		v_distance=NULL;
 		previous=n.previous;
 		return *this;
 	}
@@ -1156,7 +1657,7 @@ public:
 		action* plan;		
 		plan=new action(step.operator_id, step.parameters, NULL);
 		node* nd=previous;
-		while (nd!=NULL)
+		while (nd->previous!=NULL)
 		{
 			plan=new action(nd->step.operator_id, nd->step.parameters, plan);
 			nd=nd->previous;
@@ -1182,72 +1683,273 @@ class agenda
 {
 public:
 	node* nd;
-	int score;
+	vector* score;
+	int depth;
 	agenda* next;
 
-	agenda(node* n1, int sc)
+	agenda()
+	{
+		nd=NULL;
+		score=NULL;
+		depth=0;
+		next=NULL;
+	}
+
+	agenda(node* n1, vector* v)
 	{
 		nd=n1;
-		score=sc;
+		score=v;
+		depth=0;
 		next=NULL;
 	}
 };
 
+
+class state_hash_entry
+{
+public:
+	node* state_node;
+	state_hash_entry* next;
+
+	state_hash_entry()
+	{
+		state_node=NULL;
+		next=NULL;
+	}
+
+	state_hash_entry(node* nd, state_hash_entry* n)
+	{
+		state_node=nd;
+		next=n;
+	}
+};
 
 
 
 class pointer
 {
 public:
-	void* ptr;
+	void* forward;
+	void* back;
+	int depth;
+	int width;
 
 	pointer() // default constructor
 	{
-		ptr=NULL;
+		depth=0;
+		width=0;
+		forward=NULL;
+		back=NULL;
 	}
 
 	pointer(void* p)
 	{
-		ptr=p;
+		depth=0;
+		width=0;
+		forward=p;
+		back=NULL;
 	}
+
+	friend ostream& operator << (ostream& stream, pointer& p)
+	{
+		fact f;
+		int i;
+		pointer* tp=&p;
+		while (tp->back!=NULL)
+		{
+			f.arguments[tp->depth]=tp->width;
+			tp=(pointer*)tp->back;
+		}
+
+		f.pred=tp->width;
+		i=p.depth+1;
+		while(i<predicates[f.pred].arity)
+		{
+			f.arguments[i]=-i-1;
+			i++;
+		}
+		while (i<max_arity)
+		{
+			f.arguments[i]=0;
+			i++;
+		}
+		stream << f;
+		return stream;
+	}
+
+
 };
+
 
 class complete_state_action;
 class linked_complete_state_action;
 
 extern pointer* hash_table;
 
+
+// This class corresponds to all the distances, related facts and achieving actions
+// of a fact for a specific sub-problem.
+class linked_distances
+{
+public:
+	vector* v_distance;
+	bool should_be_deleted;
+	linked_hash_entry* related;		// The lists of related facts for this distance...
+	inverted_action* achieved_by;	// The inverted action that achieved the fact with this distance...
+	inverted_distance* achieved_by_distance;	// This field points to the exactly cost vector
+								// of the action that achieved that fact. In the pointed object
+								// there are pointers to the preconditions' cost vectors 
+								// that produced this specific distance...
+								// This field is currently not used...
+	hash_entry* h;				// This field points to the hash_entry, where this distance belongs.
+								// This field will be used to transform chains of cost vectors to 
+								// chains of facts, while applying XOR routines...
+								// Currently this field is not used...
+	linked_distances* next;
+
+	linked_distances()
+	{
+		v_distance=NULL;
+		should_be_deleted=false;
+		related=NULL;
+		h=NULL;
+		next=NULL;
+	}
+
+	linked_distances(linked_distances* n)
+	{
+		v_distance=NULL;
+		should_be_deleted=false;
+		related=NULL;
+		h=NULL;
+		next=n;
+	}
+	// ATTENTION: A destructor is needed here, in order to delete the linked lists 
+	// of other objects that are pointed by this object.
+};
+
+// This class corresponds to the sets of distances, related facts and achieving actions
+// of the several sub-problems
+// This class is also used to link several cost vectors from different facts,
+// in the Grt.cpp routines...
+class linked_linked_distances
+{
+public:
+	linked_distances* distances;
+	linked_linked_distances* next;
+
+	linked_linked_distances()
+	{
+		distances=NULL;
+		next=NULL;
+	}
+
+	linked_linked_distances(linked_linked_distances* n)
+	{
+		distances=NULL;
+		next=n;
+	}
+
+	linked_linked_distances(linked_distances* d)
+	{
+		distances=d;
+		next=NULL;
+	}
+
+	linked_linked_distances(linked_distances* d, linked_linked_distances* n)
+	{
+		distances=d;
+		next=n;
+	}
+
+};
+
+
+class linked_linked_hash_entry
+{
+public:
+	linked_hash_entry* related;
+	linked_linked_hash_entry* next;
+
+	linked_linked_hash_entry()
+	{
+		related=NULL;
+		next=NULL;
+	}
+
+	linked_linked_hash_entry(linked_linked_hash_entry* n)
+	{
+		related=NULL;
+		next=n;
+	}
+};
+
+
 class hash_entry
 {
 public:
-	fact f;
-	int distance;
-	linked_inverted_action* inv_op_prec;
-	linked_hash_entry* related;
-	//linked_fact* related;
+	fact f;							// The fact.
+	linked_linked_distances* subproblem_distances;		// The distances, related facts and the actios that achieved
+										// that fact, for the various sub-problems...
+	
+	linked_inverted_action* inv_op_prec;	// The inverted actions that have this fact as precondition...
+	
+	complete_state_action* forward_achieved_by;
+	
 	bool achieved;	// used by the 'Complete_state' module, in order
 					// to indicate whether a fact has been achieved or not
+	vector* init_vector;	// This field keeps the resources needed for achieving the fact from
+							// the initial state. The resources are computed in an admissible manner,
+							// i.e. we use "max" function to compute the cost for applying an normal action
+							// and "min" function for the resource vectors of the several ways of 
+							// achieving the fact...
 	linked_hash_entry* mutexes;
 	linked_complete_state_action* normal_actions;	// pointers to the normal actions that have
 													// this fact as a precondition.
 	linked_complete_state_action* normal_actions_add; // pointers to the normal actions that
 						// have thisfact as an add effect...
-	bool enriched;
-	bool used;			// Indicates if the fact of the enriched goal state
-						// has been used 
+	
+	// !!! IT WOULD NOT BE IMPORTANT (AT LEAST INITIALLY) TO KEEP THE INFORMATION 
+	// OF ENRICHED AND USED FACTS FOR ALL THE SUBPROBLEMS. THIS IS BECAUSE THIS INFORMATION
+	// IS USED AT THE MAIN PROBLEM, BEFORE TRYING TO SOLVE ANY SUBPROBLEM, 
+	// SO IT WOULD BE ENOUGH SIMPLY FALS-0FY THESE TWO FIELDS BEFORE COPING WITH
+	// THE SUBPROBLEM.
+	// HOWEVER, IN THE FUTURE AND IF GRT DOES NOT COMPUTE INITIALLY ALL THE DISTANCES
+	// BUT ONLY THOSE THAT ARE NEEDED, THIS INFORMATION MAY COULD BE IMPORTANT TO RETAIN...
+	linked_bool* linked_enriched;		// Indicates whether the fact is part of the enriched goal state.
+	linked_bool* linked_used;			// Indicates whether the fact of the enriched goal state has been used.
 
-	hash_entry(fact f1)
+	bool enriched_init;			// The fact is member of the enriched initial state (AIPS-2000...)
+	bool enriched_init_used;	// The fact of the enriched initial state has been used... (for what? see 'New_comple_states.cpp')
+	bool new_fact;
+
+	bool goal_fact_used;	// this field indicates whether a goal fact has already
+							// supported the usage of an enriched goal fact...
+
+	bool dynamic;	// Indicates whether fact's predicate is static or dynamic...
+	pointer* back;
+
+	hash_entry(fact* f1)
 	{
-		f=f1;
-		distance=-1;
+		f=*f1;
+		subproblem_distances=NULL;
+		//linked_achieved_by=NULL;
 		inv_op_prec=NULL;
 		normal_actions=NULL;
 		normal_actions_add=NULL;
-		related=NULL;
+		//linked_related=NULL;
 		achieved=false;
+		init_vector=NULL;
 		mutexes=NULL;
-		enriched=false;
-		used=false;
+		linked_enriched=NULL;
+		linked_used=NULL;
+		enriched_init=false;
+		enriched_init_used=false;
+		new_fact=false;
+		goal_fact_used=false;
+		forward_achieved_by=NULL;
+		dynamic=true;
+		back=NULL;
 	}
 };
 
@@ -1287,60 +1989,74 @@ hash_entry* get_fact_pointer(fact*);
 class complete_state_action
 {
 public:
-	action step;		// the action
+	action* step;		// the action
 	linked_hash_entry* precs;	// a linked list of pointers to the precondition facts in the hash table
 	linked_hash_entry* del;		// a linked list of pointers to the delete list facts in the hash table
 	linked_hash_entry* add;		// a linked list of pointers to the add list facts in the hash table
 	linked_hash_entry* non_deleted_precs;	// a linked list of pointers to the non_deleted preconditions in the hash table
+//	int unsatisfied_precs;
+//	int remaining_mutexes;
 	bool satisfied_prec;	// flag that indicates whether the preconditions have all been achieved or not
 	bool no_mutex;			// flag that indicates whether the already achieved preconditions are not mutex to each other
 	bool already_in_agenda;	// flag that indicates whether the action is already in agenda or not
 	complete_state_action* next; // pointer to the next action
 	bool first_application;		// indicates whether it is about the first application of the action or not.
+	vector* action_cost;			// The cost for applying the action (without the preconditions' cost...
+	vector* total_cost;
+	bool has_dynamic_precs;
 	
-	complete_state_action(action act)
+	complete_state_action(action* act)
 	{
+		int oper_id=act->operator_id;
+		int* vars=act->parameters;
 		step=act;
 		satisfied_prec=false;
 		no_mutex=false;
 		next=NULL;
-		
+
+		action_cost=NULL;
+		total_cost=NULL;
+//		unsatisfied_precs=0;
+//		remaining_mutexes=-1;
 		precs=NULL;
 		del=NULL;
 		add=NULL;
 		non_deleted_precs=NULL;
 		first_application=true;
 		already_in_agenda=false;
+		has_dynamic_precs=false;
 
 		int i;
 		// creating the 'del' list
-		for(i=0;i<Operators[step.operator_id].sof_lists[delete_list];i++)
+		for(i=0;i<Operators[oper_id].sof_lists[delete_list];i++)
 		{
-			if (!constant_predicates[Operators[step.operator_id].strips[delete_list][i].pred])
+			if (!constant_predicates[Operators[oper_id].strips[delete_list][i].pred])
 			{
 				hash_entry* ptr;
-				ptr=get_fact_pointer(&Operators[step.operator_id].strips[delete_list][i].instantiate(step.parameters));
-				del=new_linked_hash_entry(linked_hash_entry(ptr, del));
+				ptr=get_fact_pointer(&Operators[oper_id].strips[delete_list][i].instantiate(vars));
+				del=new linked_hash_entry(ptr, del);
 			}
 		}
 		// creating the 'add' list
-		for(i=0;i<Operators[step.operator_id].sof_lists[add_list];i++)
+		for(i=0;i<Operators[oper_id].sof_lists[add_list];i++)
 		{
-			if (!constant_predicates[Operators[step.operator_id].strips[add_list][i].pred])
+			if (!constant_predicates[Operators[oper_id].strips[add_list][i].pred])
 			{
 				hash_entry* ptr;
-				ptr=get_fact_pointer(&Operators[step.operator_id].strips[add_list][i].instantiate(step.parameters));
-				add=new_linked_hash_entry(linked_hash_entry(ptr, add));
+				ptr=get_fact_pointer(&Operators[oper_id].strips[add_list][i].instantiate(vars));
+				add=new linked_hash_entry(ptr, add);
 			}
 		}
 		// creating the 'prec' and the 'non_deleted_precs' lists
-		for(i=0;i<Operators[step.operator_id].sof_lists[prec_list];i++)
+		for(i=0;i<Operators[oper_id].sof_lists[prec_list];i++)
 		{
-			if (!constant_predicates[Operators[step.operator_id].strips[prec_list][i].pred])
+			if (!constant_predicates[Operators[oper_id].strips[prec_list][i].pred])
 			{
+				has_dynamic_precs=true;
+//				unsatisfied_precs++;
 				hash_entry* ptr;
-				ptr=get_fact_pointer(&Operators[step.operator_id].strips[prec_list][i].instantiate(step.parameters));
-				precs=new_linked_hash_entry(linked_hash_entry(ptr, precs));
+				ptr=get_fact_pointer(&Operators[oper_id].strips[prec_list][i].instantiate(vars));
+				precs=new linked_hash_entry(ptr, precs);
 				
 				bool flag=true;
 				linked_hash_entry* temp_del=del;
@@ -1348,17 +2064,18 @@ public:
 				{
 					if (temp_del->entry->f==ptr->f)
 						flag=false;
-					temp_del=temp_del->next;
+					else
+						temp_del=temp_del->next;
 				}
 				if (flag)
-					non_deleted_precs=new_linked_hash_entry(linked_hash_entry(ptr, non_deleted_precs));
+					non_deleted_precs=new linked_hash_entry(ptr, non_deleted_precs);
 			}
 		}
 		
 	}
 };
 
-
+  
 
 class linked_complete_state_action
 {
@@ -1386,8 +2103,350 @@ public:
 };
 
 
+extern complete_state_action* normal_actions_head;
+extern complete_state_action* normal_actions_tail;
+extern linked_complete_state_action* c_agenda_head;
+extern linked_complete_state_action* c_agenda_tail;
+
+// Class constraint groups a set of facts (general definitions), 
+// that hold simoultaneously in a given state. 
+// However. usually this structure contains a single fact.
+class constraint
+{
+public:
+	linked_fact* ands;
+	constraint* next;
+
+	constraint()
+	{
+		ands=NULL;
+		next=NULL;
+	}
+
+	constraint(constraint* n)
+	{
+		ands=NULL;
+		next=n;
+	}
+/*
+	constraint(fact f)
+	{
+		ands=new linked_fact(f);
+		next=NULL;
+	}
+*/
+};
+
+
+// This class contains general definitions of sets of facts (of the class 'constraint'),
+// where only the facts of one set can hold in a given state.
+class constraints
+{
+public:
+	constraint* xor;
+	linked_fact* constants;
+	int nof_parameters;
+	constraints* next;
+
+	constraints()
+	{
+		xor=NULL;
+		constants=NULL;
+		nof_parameters=0;
+		next=NULL;
+	}
+	
+	constraints(constraints* n)
+	{
+		xor=NULL;
+		constants=NULL;
+		nof_parameters=0;
+		next=n;
+	}
+
+	friend ostream& operator << (ostream& stream, constraints& t_xors)
+	{
+		stream << "XOR Relation - Facts: ";
+		constraint* t_xor=t_xors.xor;
+		while (t_xor!=NULL)
+		{
+			stream << t_xor->ands->f << ", ";
+			t_xor=t_xor->next;
+		}	// while (t_xor!=NULL)
+		stream << "   Constants: ";
+		
+		linked_fact* xor_constants=t_xors.constants;
+		while (xor_constants!=NULL)
+		{
+			stream << xor_constants->f << ", ";
+			xor_constants=xor_constants->next;
+		}	// while (xor_constants!=NULL)
+		return stream;
+	}
+};
+
+
+// This class is the instantiation of a 'constraints' object,
+// having given values to the variables of the 'constraints' object.
+class ground_constraint
+{
+public:
+	constraints* xors;
+	int parameters[max_nof_parameters];
+
+	ground_constraint()
+	{
+		xors=NULL;
+		int i;
+		for(i=0;i<max_nof_parameters;i++)
+			parameters[i]=0;
+	}
+
+	ground_constraint(constraints* x)
+	{
+		xors=x;
+		int i;
+		for(i=0;i<max_nof_parameters;i++)
+			parameters[i]=0;
+	}
+
+	ground_constraint operator = (ground_constraint xors2)
+	{
+		xors=xors2.xors;
+		int i;
+		for (i=0;i<max_nof_parameters;i++)
+			parameters[i]=xors2.parameters[i];
+		return *this;
+	}
+
+	bool operator == (ground_constraint xors2)
+	{
+		if (xors==NULL || xors2.xors==NULL)
+			return false;
+		if (xors!=xors2.xors)
+			return false;
+		else
+		{
+			int i;
+			for(i=0;i<xors->nof_parameters;i++)
+				if (parameters[i]!=xors2.parameters[i])
+					return false;
+		}
+		return true;
+	}
+
+	bool operator != (ground_constraint xors2)
+	{
+		if (xors==NULL || xors2.xors==NULL) 
+			return true;
+		if (xors!=xors2.xors)
+			return true;
+		else
+		{
+			int i;
+			for(i=0;i<xors->nof_parameters;i++)
+				if (parameters[i]!=xors2.parameters[i])
+					return true;
+		}
+		return false;
+	}
+
+	friend ostream& operator << (ostream& stream, ground_constraint& ground_xors)
+	{
+		stream << "Ground XOR Relation - Facts: ";
+		constraint* t_xor=ground_xors.xors->xor;
+		fact f;
+		while (t_xor!=NULL)
+		{
+			f=t_xor->ands->f.instantiate(ground_xors.parameters) ;
+			stream << f << ", ";
+			t_xor=t_xor->next;
+		}	// while (t_xor!=NULL)
+		stream << "   Constants: ";
+		
+		linked_fact* xor_constants=ground_xors.xors->constants;
+		while (xor_constants!=NULL)
+		{
+			f=xor_constants->f.instantiate(ground_xors.parameters);
+			stream <<  f << ", ";
+			xor_constants=xor_constants->next;
+		}	// while (xor_constants!=NULL)
+		return stream;
+	}
+};
+
+// This class can hold all the ground constraints of a specific problem instance.
+class linked_ground_constraints
+{
+public:
+	ground_constraint* ground_xor;
+	linked_ground_constraints* next;
+
+	linked_ground_constraints(ground_constraint* g_xor)
+	{
+		ground_xor=g_xor;
+		next=NULL;
+	}
+
+	linked_ground_constraints(ground_constraint* g_xor, linked_ground_constraints* n)
+	{
+		ground_xor=g_xor;
+		next=n;
+	}
+};
+
+// This structure is used to keep the pairs of facts, one from the 
+// initial state and one from the goals, that are XOR-constrained.
+class pairs_of_facts
+{
+public:
+	ground_constraint ground_xor;
+	hash_entry* initial;
+	hash_entry* goal;
+	linked_hash_entry* sequence;
+	pairs_of_facts* next;
+
+	pairs_of_facts()
+	{
+		initial=NULL;
+		goal=NULL;
+		sequence=NULL;
+		next=NULL;
+
+	}
+
+	pairs_of_facts(pairs_of_facts* pairs)
+	{
+		initial=NULL;
+		goal=NULL;
+		sequence=NULL;
+		next=pairs;
+	}
+};
+
+
+// This class keeps the facts that are subgoals,
+// i.e. the facts that will be used to construct the intermediate states, 
+// together with all relative and needed information for each fact.
+class subgoal
+{
+public:
+	hash_entry* h;						// The fact that is a subgoal
+	ground_constraint xor_relation;		// The ground XOR-relation, by which the fact 
+										// has been marked as a subgoal;
+	int position;						// The position of the action that inserted the fact.
+	int subgoal_type;					// If subgoal_type==0 then the fact is in the initial state.
+										// If subgoal_type==1 then the fact is a precondition of an action 
+										//		of another XOR-sequence. 
+										// If subgoal_type==2 then the fact is an add_effect of an action
+										//		of the same XOR-sequence.
+										// If subgoal_type==3 then the fact is a goal fact of its own XOR-sequence.
+	ground_constraint foreign_xor_relation;	// This field is used only by the subgoals of type 1.
+	int level;	// The level (i.e. the substate) at which the subgoal is located...
+				// Level 0 is the initial state.
+										
+
+	subgoal()
+	{
+		h=NULL;
+		xor_relation.xors=NULL;
+		position=-1;
+		subgoal_type=-1;
+		foreign_xor_relation.xors=NULL;
+		level=-1;
+	}
+
+	subgoal(hash_entry* hf)
+	{
+		h=hf;
+		xor_relation.xors=NULL;
+		position=-1;
+		subgoal_type=-1;
+		foreign_xor_relation.xors=NULL;
+		level=-1;
+	}
+};
+
+// This class is used to keep in a linked list all the subgoals of a problem...
+class linked_subgoals
+{
+public:
+	subgoal* subgoalPtr;
+	linked_subgoals* next;
+
+	linked_subgoals()
+	{
+		subgoalPtr=NULL;
+		next=NULL;
+	}
+
+	linked_subgoals(hash_entry* h)
+	{
+		subgoalPtr=new subgoal(h);
+		next=NULL;
+	}
+
+	linked_subgoals(subgoal* sub)
+	{
+		subgoalPtr=sub;
+		next=NULL;
+	}
+};
+
+// This structure is used to keep the goal states of the subproblems
+// that have to be solved (after the problem decomposition based on
+// the XOR relations).
+class linked_states
+{
+public:
+	state* s;
+	int id;
+	linked_states* next;
+
+	linked_states()
+	{
+		s=NULL;
+		id=-1;
+		next=NULL;
+	}
+};
+
+
+extern constraints* xors;
+void xor_routines(state*);
+
+class level
+{
+public:
+	int l;
+	level* next;
+
+	level()
+	{
+		l=-1;
+		next=NULL;
+	}
+
+	level(level* n)
+	{
+		l=-1;
+		next=n;
+	}
+
+	level(int l1, level* n)
+	{
+		l=l1;
+		next=n;
+	}
+};
+
+extern level* subproblem_level;
+
+
 // FUNCTION PROTOTYPES: test_routines.cpp
 void display_objects();	
+void display_resources();
+void display_consumable_resources();
 void display_predicates();
 void display_operators();
 void display_constants();
@@ -1395,32 +2454,61 @@ void display_constant_predicates();
 void display_agenda(agenda*);
 void display_hash_table();
 void print_linked_actions(action* act);
+void display_xor_relations();
+void display_pairs(pairs_of_facts*);
+void display_sequences(pairs_of_facts*);
+void display_subgoals(linked_subgoals*);
+void print_leveled_subgoals(int, linked_subgoals*);
+void print_subproblems(linked_states* subproblems);
+void display_fact_distances(hash_entry* h);
+void display_entry(hash_entry* h);
+void display_normal_actions();
+void display_entry_related(hash_entry* h);
 	
 // FUNCTION PROTOTYPES: parser.cpp
 bool load_domain();
 bool load_problem();
 void copy_operators();
 
-// FUNCTION PROTOTYPES: auxiliary_functions
+// FUNCTION PROTOTYPES: auxiliary_functions.cpp
 bool strcmp2(char s1[], char s2[]);
 bool process_command_line(int argc, char* argv[]);
 void check_time();
+void for_every_hash_entry(void f(hash_entry*));
 
-// FUNCTION PROTOTYPES: GRT
+// FUNCTION PROTOTYPES: GRT.CPP
 void create_inverted_operators();
-void release_memory();
-void find_all_distances();
-void create_all_facts();
+void create_inverted_actions();
+void find_all_distances(linked_hash_entry*);
 void add_goals(state*);
 void display_inverted_satisfied();
-int find_grade(linked_hash_entry* linked_facts);
+vector* find_grade(linked_linked_distances* linked_facts, linked_linked_distances** original_reduced_end_facts);
 hash_entry* get_fact_pointer(fact* f);
 bool included_in_fact_list(fact f, linked_fact* linked_list);
 void delete_linked_hash_entry_list(linked_hash_entry*);
+void assign_inverted_actions_costs();
 
+// FUNCTION PROTOTYPES: XOR.CPP
+void add_GRG_level(hash_entry*);
+void delete_GRG_level(hash_entry*);
+void detect_idle_objects();
+void add_idle_level();
+void delete_idle_level();
+void display_current_subproblem_level();
+bool idle_object(int obj, state* s);
 
-// FUNCTION PROTOTYPES: COMPLETE_STATES
-void complete_goal_state();
-extern linked_hash_entry* new_goals;
+// FUNCTION PROTOTYPES: COMPLETE_STATES.CPP
+void compute_mutexes();
+void complete_goals(linked_hash_entry**);
+
+// FUNCTION PROTOTYPES: PLANNER.CPP
+void solve_subproblems(state*);
+
+// FUNCTION PROTOTYPES: CREATE_ACTIONS
+void insert_fact_to_hash_table(fact* f);
 
 int get_time();
+
+void search_routines(state*);
+
+void test_movie1();
