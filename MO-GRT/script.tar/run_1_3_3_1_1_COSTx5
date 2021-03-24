@@ -1,0 +1,56 @@
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-4-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-4-1.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-4-2.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-5-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-5-1.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-5-2.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-6-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-6-1.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-6-2.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-6-9.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-7-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-7-1.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-8-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-8-1.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-9-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-9-1.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-10-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-10-1.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-11-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-11-1.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-12-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-12-1.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-13-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-13-1.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-14-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-14-1.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-15-0.pddl
+
+grt -os unix -r0 -MO -scale 1 mul 5 -d Logistics_1_3_3_1_1/domain.pddl -p Logistics_1_3_3_1_1/probLOGISTICS-15-1.pddl
+
